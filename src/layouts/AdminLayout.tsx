@@ -16,7 +16,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { LanguageSelector } from "@/components/LanguageSelector";
 import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/admin" },
@@ -108,17 +110,29 @@ const AdminLayout = () => {
             <h2 className="text-sm font-semibold text-foreground">Admin Panel</h2>
           </div>
           <div className="flex-1 lg:flex-none"></div>
-          <button 
-            onClick={() => navigate("/admin/notifications")} 
-            className="p-2 rounded-full bg-muted hover:bg-muted/80 text-foreground transition-colors relative"
-          >
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-destructive rounded-full border-2 border-background"></span>
-          </button>
+          <div className="flex items-center gap-2">
+            <LanguageSelector className="relative" />
+            <button 
+              onClick={() => navigate("/admin/notifications")} 
+              className="p-2 rounded-full bg-muted hover:bg-muted/80 text-foreground transition-colors relative"
+            >
+              <Bell className="w-5 h-5" />
+              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-destructive rounded-full border-2 border-background"></span>
+            </button>
+          </div>
         </header>
-        <main className="flex-1 overflow-auto">
-          <Outlet />
-        </main>
+        <AnimatePresence mode="wait">
+          <motion.main 
+            className="flex-1 overflow-auto"
+            key={location.pathname}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+          >
+            <Outlet />
+          </motion.main>
+        </AnimatePresence>
       </div>
     </div>
   );

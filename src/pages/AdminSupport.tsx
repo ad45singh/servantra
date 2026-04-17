@@ -62,7 +62,7 @@ const AdminSupport = () => {
           }));
           setTickets(merged);
         } else {
-          setTickets(ticketsData);
+          setTickets(ticketsData as any);
         }
       } else {
         setTickets([]);

@@ -59,6 +59,17 @@ const FavoriteVendors = () => {
       setLoading(false);
     };
     fetchFavorites();
+
+    const channel = supabase
+      .channel("favorite-vendors-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "favorite_vendors", filter: `customer_id=eq.${user.id}` }, () => {
+        fetchFavorites();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user]);
 
   const handleRemove = async (id: string) => {

@@ -15,26 +15,18 @@ export const useFavoriteVendor = (vendorId: string | undefined) => {
   };
 
   useEffect(() => {
-    if (!user || !vendorId) return;
+    if (!user || !vendorId || !isValidUUID(vendorId)) return;
     
     const check = async () => {
-      if (!isValidUUID(vendorId) || !isValidUUID(user.id)) {
-        // Fallback for dummy data
-        const localFav = localStorage.getItem(`fav_${vendorId}`);
-        if (localFav) setIsFavorite(true);
-        return;
-      }
-
       try {
-        const { data, error } = await (supabase.from("favorite_vendors" as any) as any)
+        const { data, error } = await supabase
+          .from("favorite_vendors")
           .select("id")
           .eq("customer_id", user.id)
           .eq("vendor_id", vendorId)
           .maybeSingle();
         
-        if (error && !error.message.includes("does not exist")) {
-          console.error("Error checking favorite:", error);
-        } else if (data) {
+        if (data) {
           setIsFavorite(true);
           setFavoriteId(data.id);
         }
@@ -47,29 +39,20 @@ export const useFavoriteVendor = (vendorId: string | undefined) => {
 
   const toggleFavorite = async () => {
     if (!user || !vendorId || loading) return;
+    if (!isValidUUID(vendorId)) {
+      toast.error("Cannot favorite a mock vendor profile");
+      return;
+    }
     setLoading(true);
     try {
-      if (!isValidUUID(vendorId) || !isValidUUID(user.id)) {
-        // Handle dummy data locally
-        if (isFavorite) {
-          localStorage.removeItem(`fav_${vendorId}`);
-          setIsFavorite(false);
-          toast.success("Removed from favorites");
-        } else {
-          localStorage.setItem(`fav_${vendorId}`, "true");
-          setIsFavorite(true);
-          toast.success("Added to favorites ❤️");
-        }
-        return;
-      }
-
       if (isFavorite && favoriteId) {
-        await (supabase.from("favorite_vendors" as any) as any).delete().eq("id", favoriteId);
+        await supabase.from("favorite_vendors").delete().eq("id", favoriteId);
         setIsFavorite(false);
         setFavoriteId(null);
         toast.success("Removed from favorites");
       } else {
-        const { data, error } = await (supabase.from("favorite_vendors" as any) as any)
+        const { data, error } = await supabase
+          .from("favorite_vendors")
           .insert({ customer_id: user.id, vendor_id: vendorId })
           .select()
           .single();
@@ -79,11 +62,7 @@ export const useFavoriteVendor = (vendorId: string | undefined) => {
         toast.success("Added to favorites ❤️");
       }
     } catch (err: any) {
-      if (err.message?.includes("does not exist")) {
-        toast.error("Database table missing. Please set up 'favorite_vendors'.");
-      } else {
-        toast.error(err.message || "Failed to update");
-      }
+      toast.error(err.message || "Failed to update");
     } finally {
       setLoading(false);
     }

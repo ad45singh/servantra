@@ -29,6 +29,16 @@ const AdminDashboard = () => {
       setLoading(false);
     };
     fetchStats();
+
+    // Real-time: refresh stats on any new booking or user
+    const channel = supabase
+      .channel("admin-dashboard-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, fetchStats)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "profiles" }, fetchStats)
+      .on("postgres_changes", { event: "*", schema: "public", table: "sos_alerts" }, fetchStats)
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   if (loading) {

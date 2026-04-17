@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { AlertTriangle, Loader2, ChevronDown, Search, Check } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MapPicker } from "./MapPicker";
 
 const VALID_COUNTRIES = [
   "Afghanistan", "Albania", "Algeria", "Argentina", "Armenia", "Australia",
@@ -191,14 +192,29 @@ const CountryDropdown = ({ value, onChange, height }: { value: string; onChange:
   );
 };
 
+
   const update = (field: keyof AddressFields, val: string) => {
     onChange({ ...value, [field]: val });
+  };
+
+  const handleMapSelect = (mapData: Partial<AddressFields>) => {
+    onChange({
+      ...value,
+      street: mapData.street || value.street,
+      area: mapData.area || value.area,
+      city: mapData.city || value.city,
+      pincode: mapData.pincode || value.pincode,
+      country: mapData.country || value.country,
+    });
   };
 
   const h = compact ? "h-10" : "h-11";
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      <MapPicker onLocationSelect={handleMapSelect} />
+      
+      <div className="space-y-3 pt-2 border-t border-border">
       <div>
         <label className="text-xs font-medium text-muted-foreground mb-1 block">
           Flat / House No. <span className="text-muted-foreground/60">(optional)</span>
@@ -261,6 +277,7 @@ const CountryDropdown = ({ value, onChange, height }: { value: string; onChange:
         </div>
       </div>
       <CountryDropdown value={value.country} onChange={(c) => update("country", c)} height={h} />
+      </div>
     </div>
   );
 };

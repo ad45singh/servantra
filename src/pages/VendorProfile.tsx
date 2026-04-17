@@ -1,58 +1,70 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, Star, MapPin, Clock, Share2, MessageCircle, ChevronRight, Camera, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useFavoriteVendor } from "@/hooks/useFavoriteVendor";
 import { cn } from "@/lib/utils";
 
-const vendorData = {
-  id: "1",
-  name: "Raj Kumar",
-  avatar: "RK",
-  coverColor: "from-primary to-primary/70",
-  rating: 4.8,
-  reviews: 156,
-  experience: 8,
-  distance: "1.2 km",
-  bio: "Certified plumber with 8+ years of experience in residential and commercial plumbing. Specializing in leak repairs, pipe installations, and bathroom fittings.",
-  services: [
-    { name: "Pipe Leak Repair", price: "₹300", duration: "30 min" },
-    { name: "Tap Installation", price: "₹500", duration: "45 min" },
-    { name: "Bathroom Fitting", price: "₹1,200", duration: "2 hrs" },
-    { name: "Drain Cleaning", price: "₹400", duration: "1 hr" },
-    { name: "Water Tank Repair", price: "₹800", duration: "1.5 hrs" },
-  ],
-  availability: [
-    { day: "Mon", hours: "9 AM – 6 PM", active: true },
-    { day: "Tue", hours: "9 AM – 6 PM", active: true },
-    { day: "Wed", hours: "9 AM – 6 PM", active: true },
-    { day: "Thu", hours: "9 AM – 6 PM", active: true },
-    { day: "Fri", hours: "9 AM – 6 PM", active: true },
-    { day: "Sat", hours: "10 AM – 4 PM", active: true },
-    { day: "Sun", hours: "Closed", active: false },
-  ],
-  gallery: [
-    { label: "Kitchen pipe fix", bg: "bg-primary/10" },
-    { label: "Bathroom remodel", bg: "bg-secondary/10" },
-    { label: "Water heater install", bg: "bg-accent" },
-    { label: "Drain unclogging", bg: "bg-success/10" },
-    { label: "Tap replacement", bg: "bg-primary/10" },
-    { label: "Pipe soldering", bg: "bg-secondary/10" },
-  ],
-  customerReviews: [
-    { name: "Arjun M.", rating: 5, date: "2 days ago", text: "Excellent work! Fixed the leak in under 30 minutes. Very professional and clean.", avatar: "AM" },
-    { name: "Sneha R.", rating: 5, date: "1 week ago", text: "Installed new taps in both bathrooms. Great quality work at a fair price. Highly recommend!", avatar: "SR" },
-    { name: "Deepak K.", rating: 4, date: "2 weeks ago", text: "Good service. Came on time and fixed the issue quickly. Could improve communication a bit.", avatar: "DK" },
-    { name: "Meera P.", rating: 5, date: "3 weeks ago", text: "Best plumber in the area! Have used his services 3 times now. Always reliable.", avatar: "MP" },
-  ],
-};
-
 const VendorProfile = () => {
   const navigate = useNavigate();
   const { id } = useParams();
-  const v = vendorData;
-  const { isFavorite, loading: favLoading, toggleFavorite } = useFavoriteVendor(id || v.id);
+  const [v, setV] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const { isFavorite, loading: favLoading, toggleFavorite } = useFavoriteVendor(id);
   const [selectedService, setSelectedService] = useState(0);
+
+  useEffect(() => {
+    const fetchVendor = async () => {
+      if (!id) return;
+      const { data: profile } = await supabase.from("profiles").select("*").eq("user_id", id).single();
+      const { data: services } = await supabase.from("vendor_services").select("*").eq("vendor_id", id).eq("active", true);
+      
+      if (profile) {
+        setV({
+          id: profile.user_id,
+          name: profile.full_name || "Vendor",
+          avatar: profile.avatar_url ? null : (profile.full_name ? profile.full_name[0].toUpperCase() : "?"),
+          avatar_url: profile.avatar_url,
+          coverColor: "from-primary to-primary/70",
+          rating: 4.8,
+          reviews: 0,
+          experience: 5,
+          distance: "1.2 km",
+          bio: "Professional service provider available for booking.",
+          services: (services && services.length > 0) ? services.map((s: any) => ({
+            name: s.name,
+            category: s.category,
+            price: `₹${s.price}`,
+            duration: s.duration || "1 hr"
+          })) : [
+            { name: "General Service", category: "Plumbing", price: "₹500", duration: "1 hr" }
+          ],
+          availability: [
+            { day: "Mon", hours: "9 AM - 6 PM", active: true },
+            { day: "Tue", hours: "9 AM - 6 PM", active: true },
+            { day: "Wed", hours: "9 AM - 6 PM", active: true },
+            { day: "Thu", hours: "9 AM - 6 PM", active: true },
+            { day: "Fri", hours: "9 AM - 6 PM", active: true },
+            { day: "Sat", hours: "10 AM - 4 PM", active: true },
+            { day: "Sun", hours: "Closed", active: false },
+          ],
+          gallery: [],
+          customerReviews: []
+        });
+      }
+      setLoading(false);
+    };
+    fetchVendor();
+  }, [id]);
+
+  if (loading) {
+    return <div className="min-h-screen bg-background flex items-center justify-center"><div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div></div>;
+  }
+
+  if (!v) {
+    return <div className="min-h-screen bg-background flex items-center justify-center text-muted-foreground">Vendor not found</div>;
+  }
 
   return (
     <div className="min-h-screen bg-background pb-28 max-w-lg mx-auto">
@@ -78,8 +90,8 @@ const VendorProfile = () => {
         </div>
         {/* Avatar */}
         <div className="absolute -bottom-10 left-4">
-          <div className="w-20 h-20 rounded-2xl bg-card shadow-elevated flex items-center justify-center text-2xl font-heading font-bold text-primary border-4 border-background">
-            {v.avatar}
+          <div className="w-20 h-20 rounded-2xl bg-card shadow-elevated flex items-center justify-center text-2xl font-heading font-bold text-primary border-4 border-background overflow-hidden">
+            {v.avatar_url ? <img src={v.avatar_url} alt="" className="w-full h-full object-cover" /> : v.avatar}
           </div>
         </div>
       </div>
@@ -89,8 +101,17 @@ const VendorProfile = () => {
         <div>
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-xl font-heading font-bold text-foreground">{v.name}</h1>
-              <p className="text-sm text-muted-foreground mt-0.5">Plumber · {v.experience} yrs experience</p>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-heading font-bold text-foreground">{v.name}</h1>
+                <span className={cn(
+                  "flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-bold",
+                  v.is_online !== false ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
+                )}>
+                  {v.is_online !== false && <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse"></span>}
+                  {v.is_online !== false ? "Available" : "Offline"}
+                </span>
+              </div>
+              <p className="text-sm text-muted-foreground mt-0.5">{v.services[0]?.category || "Service Provider"} · {v.experience} yrs experience</p>
             </div>
             <div className="flex items-center gap-1 bg-secondary/10 px-2.5 py-1 rounded-lg">
               <Star className="w-4 h-4 fill-secondary text-secondary" />
@@ -154,8 +175,9 @@ const VendorProfile = () => {
             <h2 className="text-base font-heading font-semibold text-foreground">Past Work</h2>
             <span className="text-xs text-muted-foreground">{v.gallery.length} photos</span>
           </div>
+          {v.gallery.length > 0 ? (
           <div className="grid grid-cols-3 gap-2">
-            {v.gallery.map((img, i) => (
+            {v.gallery.map((img: any, i: number) => (
               <div
                 key={i}
                 className={`aspect-square rounded-xl ${img.bg} flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity`}
@@ -164,6 +186,11 @@ const VendorProfile = () => {
               </div>
             ))}
           </div>
+          ) : (
+            <div className="text-center py-6 bg-muted/30 rounded-xl border border-dashed border-border">
+              <p className="text-xs text-muted-foreground">No photos added yet.</p>
+            </div>
+          )}
         </section>
 
         {/* Reviews */}
@@ -172,8 +199,9 @@ const VendorProfile = () => {
             <h2 className="text-base font-heading font-semibold text-foreground">Reviews</h2>
             <button className="text-xs font-medium text-primary hover:underline">See All</button>
           </div>
+          {v.customerReviews.length > 0 ? (
           <div className="space-y-3">
-            {v.customerReviews.map((r, i) => (
+            {v.customerReviews.map((r: any, i: number) => (
               <div key={i} className="bg-card rounded-xl p-4 shadow-card">
                 <div className="flex items-center gap-2.5 mb-2">
                   <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-xs font-heading font-semibold text-accent-foreground">
@@ -196,6 +224,11 @@ const VendorProfile = () => {
               </div>
             ))}
           </div>
+          ) : (
+            <div className="text-center py-6 bg-muted/30 rounded-xl border border-dashed border-border">
+              <p className="text-xs text-muted-foreground">No reviews yet.</p>
+            </div>
+          )}
         </section>
       </div>
 
@@ -208,7 +241,7 @@ const VendorProfile = () => {
           <Button size="lg" className="flex-1" onClick={() => {
             const s = v.services[selectedService];
             const price = parseInt(s.price.replace(/[₹,]/g, ""));
-            navigate("/book", { state: { category: "Plumbing", service: { name: s.name, price, duration: s.duration } } });
+            navigate("/book", { state: { category: s.category || "Plumbing", service: { name: s.name, price, duration: s.duration } } });
           }}>
             Book Now <ChevronRight className="w-5 h-5" />
           </Button>

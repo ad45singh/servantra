@@ -6,6 +6,9 @@
     <title>Servantra - City Services</title>
     <meta name="description" content="One app for everything you need.">
     <meta name="author" content="Servantra" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
     <meta property="og:type" content="website" />
     <meta property="og:image" content="/favicon.ico">
@@ -19,8 +22,34 @@
     <meta name="twitter:description" content="Your City. Your Services.">
   </head>
 
-  <body>
+  <body style="top: 0px !important;">
     <div id="root"></div>
+    
+    <!-- Google Translate Widget Container -->
+    <div id="google_translate_element" style="display:none;"></div>
+    <script type="text/javascript">
+      function googleTranslateElementInit() {
+        new google.translate.TranslateElement({
+          pageLanguage: 'en',
+          autoDisplay: false
+        }, 'google_translate_element');
+      }
+    </script>
+    <script type="text/javascript" src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+    
+    <style>
+      .skiptranslate iframe,
+      .skiptranslate.goog-te-banner-frame {
+        display: none !important;
+      }
+      body {
+        top: 0px !important; 
+        position: static !important;
+      }
+      #goog-gt-tt, .goog-te-balloon-frame { display: none !important; }
+      .goog-text-highlight { background-color: transparent !important; box-shadow: none !important; }
+    </style>
+    
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

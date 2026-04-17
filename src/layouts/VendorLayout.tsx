@@ -1,6 +1,8 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import { LayoutDashboard, CalendarCheck, Wrench, User, HeadphonesIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { GlobalHeader } from "@/components/GlobalHeader";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/vendor" },
@@ -13,10 +15,23 @@ const navItems = [
 const VendorLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const hideHeaderPaths = ["/vendor/notifications", "/vendor/support"];
+  const showHeader = !hideHeaderPaths.includes(location.pathname);
 
   return (
-    <div className="min-h-screen bg-background">
-      <Outlet />
+    <div className="min-h-screen bg-background pb-20">
+      {showHeader && <GlobalHeader title="Vendor Panel" showNotifications={true} />}
+      <AnimatePresence mode="wait">
+        <motion.main
+          key={location.pathname}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+        >
+          <Outlet />
+        </motion.main>
+      </AnimatePresence>
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-lg border-t border-border">
         <div className="max-w-lg mx-auto flex items-center justify-around py-2 px-2">
           {navItems.map((item) => {

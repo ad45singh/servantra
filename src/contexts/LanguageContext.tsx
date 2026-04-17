@@ -24,6 +24,23 @@ const translations: Translations = {
     "or_continue_with": "or continue with",
     "sign_in_google": "Sign in with Google",
     "loading": "Loading...",
+    "nav_dashboard": "Dashboard",
+    "nav_bookings": "Bookings",
+    "nav_services": "Services",
+    "nav_support": "Support",
+    "nav_profile": "Profile",
+    "nav_notifications": "Notifications",
+    "nav_favorites": "Favorites",
+    "payment_cash": "Cash",
+    "payment_card": "Card",
+    "payment_upi": "UPI",
+    "withdraw_bank": "Bank Transfer",
+    "withdraw_upi": "UPI Withdrawal",
+    "otp_title": "Verify OTP",
+    "otp_desc": "Enter the 4-digit code sent to your mobile.",
+    "otp_verify": "Verify & Complete",
+    "otp_resend": "Resend Code",
+    "otp_invalid": "Invalid OTP. Please try again.",
   },
   hi: {
     "app_title": "Servantra",
@@ -44,6 +61,23 @@ const translations: Translations = {
     "or_continue_with": "या इसके साथ जारी रखें",
     "sign_in_google": "Google के साथ साइन इन करें",
     "loading": "लोड हो रहा है...",
+    "nav_dashboard": "डैशबोर्ड",
+    "nav_bookings": "बुकिंग",
+    "nav_services": "सेवाएँ",
+    "nav_support": "सहायता",
+    "nav_profile": "प्रोफ़ाइल",
+    "nav_notifications": "सूचनाएं",
+    "nav_favorites": "पसंदीदा",
+    "payment_cash": "नकद (Cash)",
+    "payment_card": "कार्ड (Card)",
+    "payment_upi": "UPI",
+    "withdraw_bank": "बैंक ट्रांसफर",
+    "withdraw_upi": "UPI निकासी",
+    "otp_title": "OTP सत्यापित करें",
+    "otp_desc": "अपने मोबाइल पर भेजे गए 4-अंकीय कोड को दर्ज करें।",
+    "otp_verify": "सत्यापित करें और पूरा करें",
+    "otp_resend": "कोड पुनः भेजें",
+    "otp_invalid": "अमान्य OTP। कृपया पुनः प्रयास करें।",
   },
   bn: {
     "app_title": "Servantra",
@@ -226,8 +260,24 @@ export const LanguageProvider = ({ children }: { children: React.ReactNode }) =>
   }, []);
 
   const setLanguage = (lang: Language) => {
+    if (language === lang) return;
+    
     setLanguageState(lang);
     localStorage.setItem("servantra_lang", lang);
+    
+    if (lang !== 'wa') {
+      if (lang === 'en') {
+        document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${window.location.hostname};`;
+      } else {
+        document.cookie = `googtrans=/en/${lang}; path=/`;
+        document.cookie = `googtrans=/en/${lang}; path=/; domain=${window.location.hostname}`;
+      }
+      
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 100);
+    }
   };
 
   const t = (key: string) => {

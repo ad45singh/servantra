@@ -7,6 +7,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { OTPVerification } from "@/components/OTPVerification";
 
 type Withdrawal = {
   id: string;
@@ -37,11 +39,14 @@ const VendorWithdraw = () => {
 
   // Form
   const [amount, setAmount] = useState("");
+  const [withdrawMethod, setWithdrawMethod] = useState<"bank" | "upi">("bank");
   const [bankName, setBankName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [confirmAccount, setConfirmAccount] = useState("");
   const [ifscCode, setIfscCode] = useState("");
   const [accountHolder, setAccountHolder] = useState("");
+  const [upiId, setUpiId] = useState("");
+  const [showOTP, setShowOTP] = useState(false);
 
   const availableBalance = totalEarnings - totalWithdrawn;
 
@@ -70,30 +75,45 @@ const VendorWithdraw = () => {
     if (!amount || Number(amount) <= 0) { toast.error("Enter a valid amount"); return false; }
     if (Number(amount) > availableBalance) { toast.error("Amount exceeds available balance"); return false; }
     if (Number(amount) < 100) { toast.error("Minimum withdrawal is ₹100"); return false; }
-    if (!bankName.trim()) { toast.error("Enter bank name"); return false; }
-    if (!accountNumber.trim() || accountNumber.length < 8) { toast.error("Enter valid account number"); return false; }
-    if (accountNumber !== confirmAccount) { toast.error("Account numbers don't match"); return false; }
-    if (!ifscCode.trim() || ifscCode.length < 8) { toast.error("Enter valid IFSC code"); return false; }
-    if (!accountHolder.trim()) { toast.error("Enter account holder name"); return false; }
+    
+    if (withdrawMethod === "bank") {
+      if (!bankName.trim()) { toast.error("Select your bank"); return false; }
+      if (!accountHolder.trim()) { toast.error("Enter account holder name"); return false; }
+      if (!accountNumber.trim() || accountNumber.length < 8) { toast.error("Enter valid account number"); return false; }
+      if (accountNumber !== confirmAccount) { toast.error("Account numbers don't match"); return false; }
+      if (!ifscCode.trim() || ifscCode.length < 11) { toast.error("Enter valid 11-digit IFSC code"); return false; }
+    } else {
+      if (!upiId.trim() || !upiId.includes("@")) { toast.error("Enter a valid UPI ID"); return false; }
+    }
     return true;
   };
 
   const handleSubmit = async () => {
     if (!user) return;
+
+    if (!showOTP) {
+      setShowOTP(true);
+      toast.info("Sending OTP for verification...");
+      return;
+    }
+
     setSubmitting(true);
     try {
+      const isUPI = withdrawMethod === "upi";
       const { data, error } = await supabase.from("withdrawals").insert({
         vendor_id: user.id,
         amount: Number(amount),
-        bank_name: bankName.trim(),
-        account_number: accountNumber.trim(),
-        ifsc_code: ifscCode.trim().toUpperCase(),
-        account_holder: accountHolder.trim(),
+        bank_name: isUPI ? "UPI" : bankName.trim(),
+        account_number: isUPI ? upiId.trim() : accountNumber.trim(),
+        ifsc_code: isUPI ? "UPI" : ifscCode.trim().toUpperCase(),
+        account_holder: accountHolder.trim() || (isUPI ? "UPI User" : ""),
+        status: "pending"
       }).select().single();
       if (error) throw error;
       setWithdrawals([data as Withdrawal, ...withdrawals]);
       setTotalWithdrawn(totalWithdrawn + Number(amount));
       setStep("done");
+      setShowOTP(false);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -131,13 +151,24 @@ const VendorWithdraw = () => {
           </div>
         </div>
 
-        {/* Step: Bank Details Form */}
+        {/* Step: Details Form */}
         {step === "form" && (
           <div className="space-y-4 animate-fade-in">
             <div className="bg-card rounded-xl p-4 shadow-card space-y-4">
-              <h2 className="text-sm font-heading font-semibold text-foreground flex items-center gap-2">
-                <Landmark className="w-4 h-4 text-primary" /> Bank Details
-              </h2>
+              <div className="flex gap-2 p-1 bg-muted rounded-xl">
+                <button 
+                  onClick={() => setWithdrawMethod("bank")}
+                  className={cn("flex-1 py-2 text-xs font-bold rounded-lg transition-all", withdrawMethod === "bank" ? "bg-card shadow-sm text-primary" : "text-muted-foreground")}
+                >
+                  Bank Transfer
+                </button>
+                <button 
+                  onClick={() => setWithdrawMethod("upi")}
+                  className={cn("flex-1 py-2 text-xs font-bold rounded-lg transition-all", withdrawMethod === "upi" ? "bg-card shadow-sm text-primary" : "text-muted-foreground")}
+                >
+                  UPI
+                </button>
+              </div>
 
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1 block">Withdrawal Amount (₹)</label>
@@ -156,36 +187,64 @@ const VendorWithdraw = () => {
                 )}
               </div>
 
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Account Holder Name</label>
-                <Input value={accountHolder} onChange={(e) => setAccountHolder(e.target.value)} placeholder="As per bank records" className="h-11 rounded-xl" maxLength={100} />
-              </div>
+              {withdrawMethod === "bank" ? (
+                <div className="space-y-4 animate-slide-down">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Select Bank</label>
+                    <Select value={bankName} onValueChange={setBankName}>
+                      <SelectTrigger className="h-11 rounded-xl">
+                        <SelectValue placeholder="Choose your bank" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["State Bank of India", "HDFC Bank", "ICICI Bank", "Axis Bank", "Kotak Mahindra Bank", "Punjab National Bank"].map(b => (
+                          <SelectItem key={b} value={b}>{b}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Bank Name</label>
-                <Input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="e.g. State Bank of India" className="h-11 rounded-xl" maxLength={100} />
-              </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Account Holder Name</label>
+                    <Input value={accountHolder} onChange={(e) => setAccountHolder(e.target.value)} placeholder="As per bank records" className="h-11 rounded-xl" maxLength={100} />
+                  </div>
 
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Account Number</label>
-                <Input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value.replace(/[^0-9]/g, ""))} placeholder="Enter account number" className="h-11 rounded-xl" type="text" inputMode="numeric" maxLength={20} />
-              </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Account Number</label>
+                    <Input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value.replace(/[^0-9]/g, ""))} placeholder="Enter account number" className="h-11 rounded-xl" type="text" inputMode="numeric" maxLength={20} />
+                  </div>
 
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Confirm Account Number</label>
-                <Input value={confirmAccount} onChange={(e) => setConfirmAccount(e.target.value.replace(/[^0-9]/g, ""))} placeholder="Re-enter account number" className="h-11 rounded-xl" type="text" inputMode="numeric" maxLength={20} />
-              </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Confirm Account Number</label>
+                    <Input value={confirmAccount} onChange={(e) => setConfirmAccount(e.target.value.replace(/[^0-9]/g, ""))} placeholder="Re-enter account number" className="h-11 rounded-xl" type="text" inputMode="numeric" maxLength={20} />
+                  </div>
 
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">IFSC Code</label>
-                <Input value={ifscCode} onChange={(e) => setIfscCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} placeholder="e.g. SBIN0001234" className="h-11 rounded-xl" maxLength={11} />
-              </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">IFSC Code</label>
+                    <Input value={ifscCode} onChange={(e) => setIfscCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} placeholder="e.g. SBIN0001234" className="h-11 rounded-xl" maxLength={11} />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4 animate-slide-down">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">UPI ID</label>
+                    <Input 
+                      value={upiId} 
+                      onChange={(e) => setUpiId(e.target.value)} 
+                      placeholder="e.g. name@upi or name@okaxis" 
+                      className="h-11 rounded-xl font-medium" 
+                    />
+                  </div>
+                  <div className="p-3 rounded-lg bg-primary/5 text-[10px] text-primary font-medium">
+                    Funds will be transferred to this UPI ID instantly after approval.
+                  </div>
+                </div>
+              )}
             </div>
 
             <Button
               size="lg"
               className="w-full"
-              disabled={!amount || !bankName || !accountNumber || !ifscCode || !accountHolder}
+              disabled={!amount || (withdrawMethod === "bank" ? (!bankName || !accountNumber || !ifscCode || !accountHolder) : !upiId)}
               onClick={() => { if (validateForm()) setStep("confirm"); }}
             >
               <Wallet className="w-5 h-5" /> Review Withdrawal
@@ -205,22 +264,31 @@ const VendorWithdraw = () => {
                   <span className="text-muted-foreground">Amount</span>
                   <span className="font-heading font-bold text-foreground">₹{Number(amount).toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Account Holder</span>
-                  <span className="font-medium text-foreground">{accountHolder}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Bank</span>
-                  <span className="text-foreground">{bankName}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Account</span>
-                  <span className="font-mono text-foreground">****{accountNumber.slice(-4)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">IFSC</span>
-                  <span className="font-mono text-foreground">{ifscCode}</span>
-                </div>
+                {withdrawMethod === "bank" ? (
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Account Holder</span>
+                      <span className="font-medium text-foreground">{accountHolder}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Bank</span>
+                      <span className="text-foreground">{bankName}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Account</span>
+                      <span className="font-mono text-foreground">****{accountNumber.slice(-4)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">IFSC</span>
+                      <span className="font-mono text-foreground">{ifscCode}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">UPI ID</span>
+                    <span className="font-medium text-foreground">{upiId}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -280,6 +348,25 @@ const VendorWithdraw = () => {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* OTP Verification Overlay */}
+        {showOTP && (
+          <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-sm">
+              <OTPVerification 
+                onVerify={(otp) => {
+                  if (otp === "1234") { // Mock success for demo
+                    handleSubmit();
+                  } else {
+                    toast.error("Invalid OTP. Try 1234");
+                  }
+                }}
+                onCancel={() => setShowOTP(false)}
+                isLoading={submitting}
+              />
             </div>
           </div>
         )}

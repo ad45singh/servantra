@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { serviceCatalog } from "@/data/services";
 import AddressForm, { type AddressFields, fieldsToFullAddress, parseAddressToFields } from "@/components/AddressForm";
+import { OTPVerification } from "@/components/OTPVerification";
 
 const services = serviceCatalog;
 
@@ -71,9 +72,13 @@ const BookingFlow = () => {
 
   // Step 6
   const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [cardDetails, setCardDetails] = useState({ number: "", expiry: "", cvv: "" });
+  const [upiId, setUpiId] = useState("");
+  const [upiApp, setUpiApp] = useState<string | null>(null);
 
   // Result
   const [bookingId, setBookingId] = useState<string | null>(null);
+  const [showOTP, setShowOTP] = useState(false);
 
   const discount = promoApplied ? Math.round((selectedSub?.price || 0) * 0.1) : 0;
   const total = (selectedSub?.price || 0) - discount;
@@ -84,7 +89,15 @@ const BookingFlow = () => {
       case 2: return addressFields.street.trim().length > 0;
       case 3: return true;
       case 4: return true;
-      case 5: return !!paymentMethod;
+      case 5: 
+        if (paymentMethod === "cash") return true;
+        if (paymentMethod === "card") {
+          return cardDetails.number.length === 16 && cardDetails.expiry.length === 5 && cardDetails.cvv.length === 3;
+        }
+        if (paymentMethod === "upi") {
+          return !!upiApp || (upiId.includes("@") && upiId.length > 3);
+        }
+        return !!paymentMethod;
       default: return false;
     }
   };
@@ -100,6 +113,14 @@ const BookingFlow = () => {
 
   const handleSubmit = async () => {
     if (!user || !selectedSub || !selectedDate || !selectedTime) return;
+    
+    // For Card/UPI, show OTP first
+    if (paymentMethod !== "cash" && !showOTP) {
+      setShowOTP(true);
+      toast.info("Verifying with your bank...");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const { data, error } = await supabase.from("bookings").insert({
@@ -114,10 +135,12 @@ const BookingFlow = () => {
         promo_code: promoApplied ? promoCode.trim() : null,
         payment_method: paymentMethod,
         price: total,
+        status: "pending"
       }).select("id").single();
       if (error) throw error;
       setBookingId(data.id);
       setStep(6); // confirmation
+      setShowOTP(false);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -355,18 +378,77 @@ const BookingFlow = () => {
             <p className="text-sm text-muted-foreground">Select how you'd like to pay.</p>
             <div className="space-y-2">
               {paymentMethods.map((pm) => (
-                <button
-                  key={pm.id}
-                  onClick={() => setPaymentMethod(pm.id)}
-                  className={cn(
-                    "w-full flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left",
-                    paymentMethod === pm.id ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/30"
+                <div key={pm.id} className="space-y-2">
+                  <button
+                    onClick={() => setPaymentMethod(pm.id)}
+                    className={cn(
+                      "w-full flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left",
+                      paymentMethod === pm.id ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/30"
+                    )}
+                  >
+                    <span className="text-2xl">{pm.icon}</span>
+                    <span className="text-sm font-semibold text-foreground">{pm.label}</span>
+                    {paymentMethod === pm.id && <Check className="w-5 h-5 text-primary ml-auto" />}
+                  </button>
+
+                  {/* Card Details */}
+                  {paymentMethod === "card" && pm.id === "card" && (
+                    <div className="p-4 bg-muted/50 rounded-xl space-y-3 border border-border animate-slide-down">
+                      <Input 
+                        placeholder="Card Number (16 digits)" 
+                        className="h-11 rounded-lg" 
+                        maxLength={16}
+                        value={cardDetails.number}
+                        onChange={(e) => setCardDetails({...cardDetails, number: e.target.value.replace(/\D/g, "")})}
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input 
+                          placeholder="MM/YY" 
+                          className="h-11 rounded-lg" 
+                          maxLength={5}
+                          value={cardDetails.expiry}
+                          onChange={(e) => setCardDetails({...cardDetails, expiry: e.target.value})}
+                        />
+                        <Input 
+                          placeholder="CVV" 
+                          className="h-11 rounded-lg" 
+                          type="password" 
+                          maxLength={3}
+                          value={cardDetails.cvv}
+                          onChange={(e) => setCardDetails({...cardDetails, cvv: e.target.value.replace(/\D/g, "")})}
+                        />
+                      </div>
+                    </div>
                   )}
-                >
-                  <span className="text-2xl">{pm.icon}</span>
-                  <span className="text-sm font-semibold text-foreground">{pm.label}</span>
-                  {paymentMethod === pm.id && <Check className="w-5 h-5 text-primary ml-auto" />}
-                </button>
+
+                  {/* UPI Options */}
+                  {paymentMethod === "upi" && pm.id === "upi" && (
+                    <div className="p-4 bg-muted/50 rounded-xl space-y-3 border border-border animate-slide-down">
+                      <div className="grid grid-cols-3 gap-2">
+                        {["Google Pay", "PhonePe", "Paytm"].map(app => (
+                          <button 
+                            key={app}
+                            onClick={() => setUpiApp(app)}
+                            className={cn(
+                              "py-2 rounded-lg text-[10px] font-bold border transition-all",
+                              upiApp === app ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border"
+                            )}
+                          >
+                            {app}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="relative">
+                        <Input 
+                          placeholder="or Enter UPI ID (e.g. user@okaxis)" 
+                          className="h-11 rounded-lg"
+                          value={upiId}
+                          onChange={(e) => { setUpiId(e.target.value); setUpiApp(null); }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
             <div className="bg-card rounded-xl p-4 shadow-card flex justify-between items-center">
@@ -415,6 +497,24 @@ const BookingFlow = () => {
               <Button size="lg" className="flex-1" onClick={() => navigate("/bookings")}>
                 My Bookings
               </Button>
+            </div>
+          </div>
+        )}
+        {/* OTP Verification Overlay */}
+        {showOTP && (
+          <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-sm">
+              <OTPVerification 
+                onVerify={(otp) => {
+                  if (otp === "1234") { // Mock success for demo
+                    handleSubmit();
+                  } else {
+                    toast.error("Invalid OTP. Try 1234");
+                  }
+                }}
+                onCancel={() => setShowOTP(false)}
+                isLoading={submitting}
+              />
             </div>
           </div>
         )}

@@ -1,19 +1,24 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Search, Star, MapPin, SlidersHorizontal, X } from "lucide-react";
+import { ArrowLeft, Search, Star, MapPin, SlidersHorizontal, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-const allVendors = [
-  { id: 1, name: "Raj Kumar", service: "Plumbing", rating: 4.8, reviews: 156, distance: 1.2, price: "₹300-500", available: true, avatar: "RK", experience: 8 },
-  { id: 2, name: "Priya Sharma", service: "Electrician", rating: 4.9, reviews: 203, distance: 0.8, price: "₹400-700", available: true, avatar: "PS", experience: 5 },
-  { id: 3, name: "Amit Singh", service: "AC Repair", rating: 4.7, reviews: 89, distance: 2.1, price: "₹500-1200", available: false, avatar: "AS", experience: 10 },
-  { id: 4, name: "Neha Gupta", service: "Salon", rating: 4.9, reviews: 312, distance: 1.5, price: "₹200-800", available: true, avatar: "NG", experience: 6 },
-  { id: 5, name: "Vikram Patel", service: "Cleaning", rating: 4.5, reviews: 67, distance: 3.0, price: "₹250-600", available: true, avatar: "VP", experience: 3 },
-  { id: 6, name: "Sunita Devi", service: "Cook", rating: 4.6, reviews: 134, distance: 0.5, price: "₹300-500", available: true, avatar: "SD", experience: 12 },
-  { id: 7, name: "Arjun Mehta", service: "Carpentry", rating: 4.4, reviews: 45, distance: 4.2, price: "₹400-900", available: false, avatar: "AM", experience: 7 },
-  { id: 8, name: "Kavita Rao", service: "Painting", rating: 4.8, reviews: 98, distance: 1.8, price: "₹500-1500", available: true, avatar: "KR", experience: 9 },
-];
+import { supabase } from "@/integrations/supabase/client";
+
+type VendorResult = {
+  id: string;
+  name: string;
+  service: string;
+  searchString?: string;
+  rating: number;
+  reviews: number;
+  distance: number;
+  price: string;
+  available: boolean;
+  avatar: string;
+  experience: number;
+};
 
 type SortOption = "relevance" | "price" | "rating" | "distance";
 
@@ -36,9 +41,73 @@ const SearchResults = () => {
   const [availableOnly, setAvailableOnly] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
+  const [allVendors, setAllVendors] = useState<VendorResult[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchVendors = async () => {
+      setLoading(true);
+      const { data: roles } = await supabase.from("user_roles").select("user_id").eq("role", "vendor");
+      if (!roles || roles.length === 0) {
+        setAllVendors([]);
+        setLoading(false);
+        return;
+      }
+      
+      const vendorIds = roles.map(r => r.user_id);
+      const { data: profiles } = await supabase.from("profiles").select("*").in("user_id", vendorIds);
+      const { data: services } = await supabase.from("vendor_services").select("*").in("vendor_id", vendorIds).eq("active", true);
+      
+      const servicesMap: Record<string, any[]> = {};
+      services?.forEach(s => {
+        if (!servicesMap[s.vendor_id]) servicesMap[s.vendor_id] = [];
+        servicesMap[s.vendor_id].push(s);
+      });
+      
+      const vendors: VendorResult[] = (profiles || []).map(p => {
+        const vendorServices = servicesMap[p.user_id] || [];
+        const primaryService = vendorServices[0];
+        
+        const allServicesString = vendorServices.map(s => `${s.category} ${s.name}`).join(" ");
+        
+        return {
+          id: p.user_id,
+          name: p.full_name || "Vendor",
+          service: primaryService ? primaryService.category : "Service Provider",
+          searchString: allServicesString,
+          rating: 4.8,
+          reviews: 0,
+          distance: 1.2,
+          price: primaryService ? `₹${primaryService.price}` : "Contact",
+          available: p.is_online !== false,
+          avatar: p.avatar_url ? p.avatar_url : (p.full_name ? p.full_name[0].toUpperCase() : "?"),
+          experience: 5
+        };
+      });
+      setAllVendors(vendors);
+      setLoading(false);
+    };
+    fetchVendors();
+    
+    const channel = supabase
+      .channel('search-vendors')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, fetchVendors)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vendor_services' }, fetchVendors)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_roles' }, fetchVendors)
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
   const filtered = allVendors
     .filter((v) => {
-      if (query && !v.name.toLowerCase().includes(query.toLowerCase()) && !v.service.toLowerCase().includes(query.toLowerCase())) return false;
+      if (query) {
+        const q = query.toLowerCase();
+        const matchesName = v.name.toLowerCase().includes(q);
+        const matchesService = v.service.toLowerCase().includes(q);
+        const matchesAllServices = v.searchString?.toLowerCase().includes(q);
+        if (!matchesName && !matchesService && !matchesAllServices) return false;
+      }
       if (minRating && v.rating < minRating) return false;
       if (availableOnly && !v.available) return false;
       return true;
@@ -136,7 +205,13 @@ const SearchResults = () => {
 
       {/* Results */}
       <div className="px-4 py-4 space-y-3">
-        <p className="text-xs text-muted-foreground">{filtered.length} vendors found</p>
+        {loading ? (
+          <div className="flex items-center justify-center h-32">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          </div>
+        ) : (
+          <>
+            <p className="text-xs text-muted-foreground">{filtered.length} vendors found</p>
         {filtered.map((vendor) => (
           <button
             key={vendor.id}
@@ -172,12 +247,14 @@ const SearchResults = () => {
           </button>
         ))}
 
-        {filtered.length === 0 && (
+        {filtered.length === 0 && !loading && (
           <div className="text-center py-12">
             <Search className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
             <p className="text-sm font-heading font-semibold text-foreground">No vendors found</p>
             <p className="text-xs text-muted-foreground mt-1">Try adjusting your filters</p>
           </div>
+        )}
+        </>
         )}
       </div>
     </div>

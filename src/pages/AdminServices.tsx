@@ -23,6 +23,11 @@ const AdminServices = () => {
   const [services, setServices] = useState<VendorService[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [serviceToDelete, setServiceToDelete] = useState<VendorService | null>(null);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   const fetchServices = async () => {
     try {
@@ -60,6 +65,15 @@ const AdminServices = () => {
 
   useEffect(() => {
     fetchServices();
+    
+    const channel = supabase
+      .channel('admin-services')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vendor_services' }, () => {
+        fetchServices();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const toggleServiceStatus = async (id: string, currentStatus: boolean) => {
@@ -80,21 +94,56 @@ const AdminServices = () => {
     }
   };
 
-  const removeService = async (id: string) => {
-    if (!window.confirm("Are you sure you want to remove this service?")) return;
+  const promptDeleteService = (service: VendorService) => {
+    setServiceToDelete(service);
+    setDeleteReason("");
+    setDeleteModalOpen(true);
+  };
+
+  const confirmRemoveService = async () => {
+    if (!serviceToDelete || !deleteReason.trim()) {
+      toast.error("Reason for deletion is required");
+      return;
+    }
     
+    setDeleting(true);
     try {
-      const { error } = await supabase
+      // 1. Log the deletion reason
+      const { data: userData } = await supabase.auth.getUser();
+      
+      try {
+        await supabase.from("deleted_vendors_log" as any).insert({
+          vendor_id: serviceToDelete.vendor_id,
+          vendor_name: serviceToDelete.vendor_name,
+          service_id: serviceToDelete.id,
+          service_name: serviceToDelete.name,
+          reason: deleteReason,
+          deleted_by: userData?.user?.id
+        });
+      } catch (e) {
+        console.log("Log table might not exist yet:", e);
+      }
+
+      // 2. Delete the service
+      const { error: serviceError } = await supabase
         .from("vendor_services")
         .delete()
-        .eq("id", id);
+        .eq("id", serviceToDelete.id);
 
-      if (error) throw error;
+      if (serviceError) throw serviceError;
       
-      setServices(prev => prev.filter(s => s.id !== id));
-      toast.success("Service removed successfully");
+      // 3. Delete the vendor account associated automatically
+      await supabase.from("user_roles").delete().eq("user_id", serviceToDelete.vendor_id);
+      await supabase.from("profiles").delete().eq("user_id", serviceToDelete.vendor_id);
+      
+      setServices(prev => prev.filter(s => s.id !== serviceToDelete.id));
+      toast.success("Service and associated vendor account deleted successfully");
+      setDeleteModalOpen(false);
+      setServiceToDelete(null);
     } catch (error: any) {
       toast.error(error.message);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -131,6 +180,42 @@ const AdminServices = () => {
           className="pl-9"
         />
       </div>
+
+      {deleteModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <Card className="w-full max-w-md shadow-elevated border-destructive/20 animate-slide-up">
+            <CardContent className="p-6 space-y-4">
+              <div className="flex items-center gap-3 text-destructive mb-2">
+                <Trash2 className="w-6 h-6" />
+                <h2 className="text-xl font-bold">Delete Vendor Service</h2>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                You are about to delete the service <strong className="text-foreground">{serviceToDelete?.name}</strong>. 
+                <span className="text-destructive font-semibold block mt-1">Warning: This will also automatically delete the associated vendor account ({serviceToDelete?.vendor_name}).</span>
+              </p>
+              
+              <div className="space-y-2 mt-4">
+                <label className="text-sm font-semibold text-foreground">Reason for Deletion <span className="text-destructive">*</span></label>
+                <textarea 
+                  value={deleteReason}
+                  onChange={(e) => setDeleteReason(e.target.value)}
+                  placeholder="Please specify why this vendor is being removed..."
+                  className="w-full min-h-[100px] p-3 rounded-xl bg-muted border-none focus:outline-none focus:ring-2 focus:ring-destructive resize-none text-sm text-foreground"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button variant="outline" className="flex-1" onClick={() => setDeleteModalOpen(false)} disabled={deleting}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" className="flex-1" onClick={confirmRemoveService} disabled={!deleteReason.trim() || deleting}>
+                  {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete Permanently"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <div className="space-y-3">
         {filtered.map((service) => (
@@ -173,7 +258,7 @@ const AdminServices = () => {
                 <Button 
                   size="sm" 
                   variant="destructive" 
-                  onClick={() => removeService(service.id)}
+                  onClick={() => promptDeleteService(service)}
                   className="flex-shrink-0"
                 >
                   <Trash2 className="w-4 h-4" />

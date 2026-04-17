@@ -72,12 +72,11 @@ const VendorOnboarding = () => {
       // 2. Insert services into vendor_services
       const servicesToInsert = services.map(s => ({
         vendor_id: user.id,
+        name: s.sub_service,
         category: s.category,
-        sub_service: s.sub_service,
-        description: s.description,
-        experience_years: parseInt(s.experience) || 0,
+        duration: `${s.experience} yrs exp`,
         price: parseFloat(s.price) || 0,
-        is_active: true
+        active: true
       }));
 
       const { error: serviceError } = await supabase
@@ -146,7 +145,7 @@ const VendorOnboarding = () => {
                         onChange={(e) => updateService(service.id, "category", e.target.value)}
                       >
                         {serviceCatalog.map(cat => (
-                          <option key={cat.id} value={cat.name}>{cat.name}</option>
+                          <option key={cat.name} value={cat.name}>{cat.name}</option>
                         ))}
                       </select>
                     </div>

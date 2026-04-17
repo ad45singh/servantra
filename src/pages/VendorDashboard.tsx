@@ -32,35 +32,22 @@ const VendorDashboard = () => {
       const active = bookings.filter((b) => ["confirmed", "in_progress"].includes(b.status));
       const pending = bookings.filter((b) => b.status === "pending");
 
-      // Demo data when no real bookings exist
-      const demoPending = pending.length > 0 ? pending : [
-        { id: "demo-1", service_type: "Plumbing", sub_service: "Pipe Leak Repair", scheduled_date: today, scheduled_time: "10:00 AM", price: 500, emergency_flag: false, customer_id: "demo-c1" },
-        { id: "demo-2", service_type: "Electrician", sub_service: "Wiring Fix", scheduled_date: today, scheduled_time: "2:00 PM", price: 800, emergency_flag: true, customer_id: "demo-c2" },
-        { id: "demo-3", service_type: "AC Repair", sub_service: "Gas Refill", scheduled_date: today, scheduled_time: "4:30 PM", price: 1200, emergency_flag: false, customer_id: "demo-c3" },
-      ];
-
       setStats({
-        earnings: todayCompleted.length > 0 ? todayCompleted.reduce((sum, b) => sum + b.price, 0) : 2500,
-        active: active.length || 2,
-        pending: demoPending.length,
+        earnings: todayCompleted.reduce((sum, b) => sum + (b.price || 0), 0),
+        active: active.length,
+        pending: pending.length,
         rating: 4.8,
       });
-      setPendingBookings(demoPending.slice(0, 3));
+      setPendingBookings(pending.slice(0, 3));
 
-      // Customer ratings (fake for demo customers)
-      const demoRatingsMap: Record<string, number> = {
-        "demo-c1": 4.5,
-        "demo-c2": 3.8,
-        "demo-c3": 4.9,
-      };
+      // Fetch real customer ratings
       const customerIds = [...new Set(pending.map((b: any) => b.customer_id))];
-      const ratingsMap: Record<string, number> = { ...demoRatingsMap };
-      const fakeRatings = [4.2, 3.8, 4.5, 4.9, 3.5, 4.7, 4.0, 4.3];
-      for (let i = 0; i < customerIds.length; i++) {
-        const cid = customerIds[i];
+      const ratingsMap: Record<string, number> = {};
+      for (const cid of customerIds) {
         const { data: ratingData } = await supabase.rpc("get_customer_avg_rating", { _customer_id: cid });
-        const real = ratingData !== null ? Number(ratingData) : 0;
-        ratingsMap[cid] = real > 0 ? real : fakeRatings[i % fakeRatings.length];
+        if (ratingData !== null && Number(ratingData) > 0) {
+          ratingsMap[cid] = Number(ratingData);
+        }
       }
       setCustomerRatings(ratingsMap);
 

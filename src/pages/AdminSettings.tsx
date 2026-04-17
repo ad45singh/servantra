@@ -42,8 +42,6 @@ type ServiceItem = {
   name: string;
   price: number;
   duration: string;
-  active: boolean;
-  display_order: number;
 };
 
 type FormState = {
@@ -52,7 +50,6 @@ type FormState = {
   name: string;
   price: string;
   duration: string;
-  active: boolean;
 };
 
 const emptyForm: FormState = {
@@ -60,7 +57,6 @@ const emptyForm: FormState = {
   name: "",
   price: "",
   duration: "",
-  active: true,
 };
 
 const AdminSettings = () => {
@@ -76,8 +72,7 @@ const AdminSettings = () => {
     const { data, error } = await supabase
       .from("service_catalog")
       .select("*")
-      .order("category", { ascending: true })
-      .order("display_order", { ascending: true });
+      .order("category", { ascending: true });
     if (error) {
       toast({ title: "Failed to load", description: error.message, variant: "destructive" });
     } else {
@@ -110,7 +105,6 @@ const AdminSettings = () => {
       name: item.name,
       price: String(item.price),
       duration: item.duration,
-      active: item.active,
     });
     setNewCategory("");
     setDialogOpen(true);
@@ -131,7 +125,7 @@ const AdminSettings = () => {
     if (form.id) {
       const { error } = await supabase
         .from("service_catalog")
-        .update({ category: finalCategory, name, price, duration, active: form.active })
+        .update({ category: finalCategory, name, price, duration })
         .eq("id", form.id);
       if (error) {
         toast({ title: "Update failed", description: error.message, variant: "destructive" });
@@ -141,17 +135,11 @@ const AdminSettings = () => {
         await load();
       }
     } else {
-      const maxOrder = Math.max(
-        0,
-        ...items.filter((i) => i.category === finalCategory).map((i) => i.display_order),
-      );
       const { error } = await supabase.from("service_catalog").insert({
         category: finalCategory,
         name,
         price,
         duration,
-        active: form.active,
-        display_order: maxOrder + 1,
       });
       if (error) {
         toast({ title: "Create failed", description: error.message, variant: "destructive" });
@@ -165,15 +153,7 @@ const AdminSettings = () => {
   };
 
   const handleToggleActive = async (item: ServiceItem) => {
-    const { error } = await supabase
-      .from("service_catalog")
-      .update({ active: !item.active })
-      .eq("id", item.id);
-    if (error) {
-      toast({ title: "Update failed", description: error.message, variant: "destructive" });
-    } else {
-      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, active: !i.active } : i)));
-    }
+    // Column does not exist in DB, removed toggle.
   };
 
   const handleDelete = async (item: ServiceItem) => {
@@ -260,18 +240,6 @@ const AdminSettings = () => {
                   />
                 </div>
               </div>
-              <div className="flex items-center justify-between rounded-lg border border-border p-3">
-                <div>
-                  <Label className="text-sm">Active</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Visible to customers and vendors
-                  </p>
-                </div>
-                <Switch
-                  checked={form.active}
-                  onCheckedChange={(v) => setForm((f) => ({ ...f, active: v }))}
-                />
-              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>
@@ -289,8 +257,7 @@ const AdminSettings = () => {
         <CardHeader>
           <CardTitle className="text-base">Overview</CardTitle>
           <CardDescription>
-            {categories.length} categories · {items.length} total services ·{" "}
-            {items.filter((i) => i.active).length} active
+            {categories.length} categories · {items.length} total services
           </CardDescription>
         </CardHeader>
       </Card>
@@ -329,21 +296,12 @@ const AdminSettings = () => {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-foreground">{item.name}</span>
-                          {!item.active && (
-                            <Badge variant="outline" className="text-muted-foreground">
-                              Inactive
-                            </Badge>
-                          )}
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5">
                           ₹{item.price} · {item.duration}
                         </p>
                       </div>
                       <div className="flex items-center gap-1">
-                        <Switch
-                          checked={item.active}
-                          onCheckedChange={() => handleToggleActive(item)}
-                        />
                         <Button size="icon" variant="ghost" onClick={() => openEdit(item)}>
                           <Pencil className="w-4 h-4" />
                         </Button>

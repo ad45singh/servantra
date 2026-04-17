@@ -67,11 +67,6 @@ const Login = () => {
   };
 
   const getRedirectUri = () => {
-    // For Capacitor native apps, use the Lovable preview URL
-    const isNative = window.location.protocol === "capacitor:" || window.location.hostname === "localhost";
-    if (isNative) {
-      return "https://f11613ce-1c4b-4f59-9468-03f0f295faba.lovableproject.com";
-    }
     return window.location.origin;
   };
 
@@ -129,7 +124,7 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 sm:px-6 relative">
-      <LanguageSelector />
+      <LanguageSelector className="absolute top-4 right-4 z-50" />
       <div className="w-full max-w-md mt-10">
         <div className="text-center mb-8 sm:mb-10">
           <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary">{t("app_title")}</h1>

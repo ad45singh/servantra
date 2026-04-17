@@ -15,11 +15,11 @@ const languages = [
   { value: "wa", label: "🔥 Gen-Z / WhatsApp Slang" },
 ];
 
-export const LanguageSelector = () => {
+export const LanguageSelector = ({ className }: { className?: string }) => {
   const { language, setLanguage } = useLanguage();
 
   return (
-    <div className="absolute top-4 right-4 z-50">
+    <div className={className}>
       <Select value={language} onValueChange={(val: any) => setLanguage(val)}>
         <SelectTrigger className="w-[140px] h-9 bg-background/80 backdrop-blur-sm border-primary/20">
           <Globe className="w-4 h-4 mr-2 text-primary" />

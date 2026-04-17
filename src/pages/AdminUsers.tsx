@@ -16,6 +16,9 @@ type UserWithRole = {
   avatar_url: string | null;
   created_at: string;
   role?: string;
+  services?: any[];
+  experience_years?: number;
+  is_online?: boolean;
 };
 
 const AdminUsers = () => {
@@ -25,23 +28,41 @@ const AdminUsers = () => {
 
   useEffect(() => {
     const fetchUsers = async () => {
-      const [profilesRes, rolesRes] = await Promise.all([
+      const [profilesRes, rolesRes, servicesRes] = await Promise.all([
         supabase.from("profiles").select("*").order("created_at", { ascending: false }),
         supabase.from("user_roles").select("*"),
+        supabase.from("vendor_services").select("*"),
       ]);
 
       const rolesMap = new Map<string, string>();
       rolesRes.data?.forEach((r) => rolesMap.set(r.user_id, r.role));
 
+      const vendorServicesMap = new Map<string, any[]>();
+      servicesRes.data?.forEach((s) => {
+        if (!vendorServicesMap.has(s.vendor_id)) vendorServicesMap.set(s.vendor_id, []);
+        vendorServicesMap.get(s.vendor_id)?.push(s);
+      });
+
       const merged = (profilesRes.data || []).map((p) => ({
         ...p,
         role: rolesMap.get(p.user_id) || "unknown",
+        services: vendorServicesMap.get(p.user_id) || [],
       }));
 
       setUsers(merged);
       setLoading(false);
     };
     fetchUsers();
+
+    // Real-time: instantly show new users/vendors
+    const channel = supabase
+      .channel("admin-users-realtime")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "profiles" }, fetchUsers)
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_roles" }, fetchUsers)
+      .on("postgres_changes", { event: "*", schema: "public", table: "vendor_services" }, fetchUsers)
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const toggleRole = async (userId: string, currentRole: string) => {
@@ -123,6 +144,7 @@ const AdminUsers = () => {
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">{user.full_name || "No name"}</p>
                     <p className="text-xs text-muted-foreground">{user.phone || "No phone"} · {user.city || "No city"}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Joined: {new Date(user.created_at).toLocaleDateString()}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -156,19 +178,50 @@ const AdminUsers = () => {
                       </span>
                     )}
                   </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-foreground truncate">{user.full_name || "No name"}</p>
-                      <CheckCircle2 className="w-3.5 h-3.5 text-success" />
+                  <div className="min-w-0 w-full">
+                    <div className="flex items-center justify-between w-full mb-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-foreground truncate">{user.full_name || "No name"}</p>
+                        <span className="flex items-center gap-1 text-[10px] bg-success/10 text-success px-1.5 py-0.5 rounded-full font-bold">
+                          <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse"></span> Available
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Badge variant="default">Vendor</Badge>
+                        <Button size="sm" variant="outline" onClick={() => toggleRole(user.user_id, "vendor")}>
+                          <ShieldOff className="w-4 h-4" /> Revoke
+                        </Button>
+                      </div>
                     </div>
-                    <p className="text-xs text-muted-foreground">{user.phone || "No phone"} · {user.city || "No city"}</p>
+                    
+                    <p className="text-xs text-muted-foreground">
+                      {user.phone || "No phone"} · {user.city || "No city"} · Joined: {new Date(user.created_at).toLocaleDateString()}
+                    </p>
+
+                    {user.services && user.services.length > 0 && (
+                      <div className="mt-3 bg-muted/30 rounded-lg p-2.5 border border-border">
+                        <p className="text-[10px] font-semibold text-muted-foreground mb-2 uppercase tracking-wider">Services Offered</p>
+                        <div className="flex flex-wrap gap-2">
+                          {user.services.map((s: any) => (
+                            <div key={s.id} className="text-xs bg-background border border-border px-2 py-1.5 rounded-md flex items-center gap-2">
+                              <span className="font-medium text-foreground">{s.name} <span className="text-[10px] text-muted-foreground">({s.category})</span></span>
+                              <span className="text-muted-foreground font-semibold">₹{s.price}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="flex items-center gap-4 mt-3">
+                      <div className="flex items-center gap-1">
+                        <Star className="w-4 h-4 fill-secondary text-secondary" />
+                        <span className="text-sm font-semibold">4.8</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        <span className="font-semibold text-foreground text-sm">{user.experience_years || 5}</span> yrs experience
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <Badge variant="default">Vendor</Badge>
-                  <Button size="sm" variant="outline" onClick={() => toggleRole(user.user_id, "vendor")}>
-                    <ShieldOff className="w-4 h-4" /> Revoke
-                  </Button>
                 </div>
               </CardContent>
             </Card>
