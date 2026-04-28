@@ -75,3 +75,5 @@ The `dist/` folder can be deployed to any static host (Vercel, Netlify, Cloudfla
 ## License
 
 MIT
+
+Developed by Aditya 
